@@ -3,7 +3,8 @@ import { SourcesDrawer } from "@/components/SourcesDrawer";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Send, ExternalLink } from "lucide-react";
+import { ArrowLeft, Send, ExternalLink, Loader } from "lucide-react";
+import { chatService, Chat, ChatMessageRole } from "@/lib/chatService";
 
 interface Source {
   title: string;
@@ -21,6 +22,7 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  status?: "sending" | "sent" | "error"; // statut d'envoi
 }
 
 export default function Demo() {
@@ -31,14 +33,9 @@ export default function Demo() {
   const [savedCorpus, setSavedCorpus] = useState("");
   const [isEditingCorpus, setIsEditingCorpus] = useState(false);
   const corpusInputRef = useRef<HTMLTextAreaElement>(null);
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "user",
-      content: "Bonjour, où est ma commande #1234 ?",
-      timestamp: new Date(Date.now() - 60000)
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentChat, setCurrentChat] = useState<Chat | null>(null);
+  const [isLoadingChat, setIsLoadingChat] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll vers le bas quand les messages changent
@@ -51,19 +48,81 @@ export default function Demo() {
     }
   }, [messages]);
 
-  const handleSendMessage = async () => {
-    if (!userInput.trim()) return;
-
-    // Ajouter le message de l'agent (toi)
-    const agentMessage: Message = {
-      id: Date.now().toString(),
-      role: "assistant",
-      content: userInput,
-      timestamp: new Date()
+  // Charger le premier chat au montage du composant
+  useEffect(() => {
+    const loadFirstChat = async () => {
+      try {
+        setIsLoadingChat(true);
+        const chat = await chatService.getFirstChat();
+        
+        if (chat) {
+          setCurrentChat(chat);
+          // Convertir les messages du backend en messages pour l'affichage
+          const displayMessages: Message[] = chat.messages.map((msg) => ({
+            id: msg.id,
+            role: msg.role as "user" | "assistant",
+            content: msg.message,
+            timestamp: new Date() // Le backend ne fournit pas les timestamps
+          }));
+          setMessages(displayMessages);
+        } else {
+          toast.error("Aucun chat disponible. Veuillez en créer un.");
+        }
+      } catch (error) {
+        console.error("Erreur lors du chargement du chat:", error);
+        toast.error("Erreur lors du chargement du chat");
+      } finally {
+        setIsLoadingChat(false);
+      }
     };
-    setMessages([...messages, agentMessage]);
-    setUserInput("");
-    toast.success("Message envoyé !");
+
+    loadFirstChat();
+  }, []);
+
+    const handleSendMessage = async () => {
+    if (!userInput.trim() || !currentChat) return;
+
+    try {
+      // Créer le message avec statut "sending"
+      const messageId = Date.now().toString();
+      const userMessage: Message = {
+        id: messageId,
+        role: "assistant",
+        content: userInput,
+        timestamp: new Date(),
+        status: "sending"
+      };
+      
+      // Ajouter le message localement immédiatement
+      setMessages((prev) => [...prev, userMessage]);
+      setUserInput("");
+
+      // Envoyer le message au backend
+      await chatService.addMessageToChat(currentChat.id, {
+        message: userInput,
+        role: ChatMessageRole.assistant
+      });
+
+      // Mettre à jour le statut à "sent"
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, status: "sent" } : msg
+        )
+      );
+      
+      toast.success("Message envoyé !");
+    } catch (error) {
+      console.error("Erreur lors de l'envoi du message:", error);
+      
+      // Mettre à jour le statut à "error"
+      setMessages((prev) =>
+        prev.map((msg, index) =>
+          index === prev.length - 1 ? { ...msg, status: "error" } : msg
+        )
+      );
+      
+      toast.error("Erreur lors de l'envoi du message");
+    }
   };
 
   const showSources = () => {
@@ -98,34 +157,65 @@ export default function Demo() {
             {/* Conversation */}
             <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
               <h2 className="text-xl font-semibold text-foreground mb-4">
-                Conversation #CS-2024-1234
+                Conversation {currentChat ? `#${currentChat.id}` : "..."}
               </h2>
               
-              <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === "user" ? "justify-start" : "justify-end"}`}
-                  >
-                    <div
-                      className={`max-w-[80%] rounded-lg px-4 py-3 ${
-                        message.role === "user"
-                          ? "bg-muted text-foreground border border-border"
-                          : "bg-primary text-primary-foreground"
-                      }`}
-                    >
-                      <p className="text-sm">{message.content}</p>
-                      <span className="text-xs opacity-70 mt-1 block">
-                        {message.timestamp.toLocaleTimeString("fr-FR", {
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
-                      </span>
-                    </div>
+              {isLoadingChat ? (
+                <div className="flex items-center justify-center h-40">
+                  <div className="flex flex-col items-center gap-3">
+                    <Loader className="w-6 h-6 animate-spin text-primary" />
+                    <span className="text-muted-foreground">Chargement du chat...</span>
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="flex items-center justify-center h-40">
+                  <span className="text-muted-foreground">Aucun message pour l'instant</span>
+                </div>
+              ) : (
+                <div className="space-y-4 mb-6 max-h-[300px] overflow-y-auto">
+                  {messages.map((message, index) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${message.role === "user" ? "justify-start" : "justify-end"}`}
+                    >
+                      <div
+                        className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                          message.role === "user"
+                            ? "bg-muted text-foreground border border-border"
+                            : "bg-primary text-primary-foreground"
+                        }`}
+                      >
+                        <p className="text-sm">{message.content}</p>
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          <span className="text-xs opacity-70">
+                            {message.timestamp.toLocaleTimeString("fr-FR", {
+                              hour: "2-digit",
+                              minute: "2-digit"
+                            })}
+                          </span>
+                          {index === messages.length - 1 && message.status && (
+                            <span className="text-xs">
+                              {message.status === "sending" && (
+                                <span className="inline-flex items-center gap-1">
+                                  <Loader className="w-3 h-3 animate-spin" />
+                                  Envoi...
+                                </span>
+                              )}
+                              {message.status === "sent" && (
+                                <span className="opacity-70">✓ Envoyé</span>
+                              )}
+                              {message.status === "error" && (
+                                <span className="text-red-500">✗ Erreur</span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
 
               {/* Input Area */}
               <div className="space-y-4">
@@ -140,11 +230,12 @@ export default function Demo() {
                       }
                     }}
                     placeholder="Tapez votre réponse ici..."
-                    className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                    disabled={isLoadingChat || !currentChat}
+                    className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <Button
                     onClick={handleSendMessage}
-                    disabled={!userInput.trim()}
+                    disabled={!userInput.trim() || isLoadingChat || !currentChat}
                     className="gap-2"
                   >
                     <Send className="w-4 h-4" />
