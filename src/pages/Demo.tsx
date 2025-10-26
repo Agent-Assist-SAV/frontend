@@ -1,11 +1,9 @@
-import { useState } from "react";
-import { GhostInput } from "@/components/GhostInput";
+import { useState, useEffect, useRef } from "react";
 import { SourcesDrawer } from "@/components/SourcesDrawer";
 import { Button } from "@/components/ui/button";
-import { getDemoSuggestions } from "@/lib/mockApi";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Send, FileText, Upload, ExternalLink } from "lucide-react";
+import { ArrowLeft, Send, ExternalLink } from "lucide-react";
 
 interface Source {
   title: string;
@@ -26,11 +24,13 @@ interface Message {
 }
 
 export default function Demo() {
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [currentScenario, setCurrentScenario] = useState<string>("");
   const [isSourcesOpen, setIsSourcesOpen] = useState(false);
   const [currentSources, setCurrentSources] = useState<Source[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [userInput, setUserInput] = useState("");
+  const [corpusInput, setCorpusInput] = useState("");
+  const [savedCorpus, setSavedCorpus] = useState("");
+  const [isEditingCorpus, setIsEditingCorpus] = useState(false);
+  const corpusInputRef = useRef<HTMLTextAreaElement>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -39,54 +39,31 @@ export default function Demo() {
       timestamp: new Date(Date.now() - 60000)
     }
   ]);
-  const [acceptedResponse, setAcceptedResponse] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const loadScenario = async (scenario: string) => {
-    setIsLoading(true);
-    setCurrentScenario(scenario);
-    setAcceptedResponse("");
-    try {
-      const response = await getDemoSuggestions(scenario);
-      setSuggestions(response.suggestions);
-    } catch (error) {
-      toast.error("Erreur lors du chargement des suggestions");
-    } finally {
-      setIsLoading(false);
+  // Auto-scroll vers le bas quand les messages changent
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      const messagesContainer = messagesEndRef.current.parentElement;
+      if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
     }
-  };
+  }, [messages]);
 
-  const handleAccept = (suggestion: Suggestion) => {
-    setAcceptedResponse(suggestion.text);
-    setCurrentSources(suggestion.sources);
-    toast.success("Suggestion acceptée !");
-  };
+  const handleSendMessage = async () => {
+    if (!userInput.trim()) return;
 
-  const handleNextVariant = () => {
-    toast.info("Variante suivante");
-  };
-
-  const handleDismiss = () => {
-    setSuggestions([]);
-    setCurrentScenario("");
-    setAcceptedResponse("");
-    toast.info("Suggestions ignorées");
-  };
-
-  const handleSend = () => {
-    if (!acceptedResponse.trim()) return;
-    
-    const newMessage: Message = {
+    // Ajouter le message de l'agent (toi)
+    const agentMessage: Message = {
       id: Date.now().toString(),
       role: "assistant",
-      content: acceptedResponse,
+      content: userInput,
       timestamp: new Date()
     };
-    
-    setMessages([...messages, newMessage]);
-    setAcceptedResponse("");
-    setSuggestions([]);
-    setCurrentScenario("");
-    toast.success("Réponse envoyée !");
+    setMessages([...messages, agentMessage]);
+    setUserInput("");
+    toast.success("Message envoyé !");
   };
 
   const showSources = () => {
@@ -133,7 +110,7 @@ export default function Demo() {
                     <div
                       className={`max-w-[80%] rounded-lg px-4 py-3 ${
                         message.role === "user"
-                          ? "bg-muted text-foreground"
+                          ? "bg-muted text-foreground border border-border"
                           : "bg-primary text-primary-foreground"
                       }`}
                     >
@@ -147,111 +124,34 @@ export default function Demo() {
                     </div>
                   </div>
                 ))}
+                <div ref={messagesEndRef} />
               </div>
 
-              {/* Scenarios */}
-              <div className="mb-4 pb-4 border-b border-border">
-                <label className="block text-sm font-medium text-foreground mb-3">
-                  Scénarios suggérés :
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={currentScenario === "suivi" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => loadScenario("suivi")}
-                    disabled={isLoading}
-                  >
-                    Suivi de commande
-                  </Button>
-                  <Button
-                    variant={currentScenario === "retour" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => loadScenario("retour")}
-                    disabled={isLoading}
-                  >
-                    Retour / RMA
-                  </Button>
-                  <Button
-                    variant={currentScenario === "garantie" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => loadScenario("garantie")}
-                    disabled={isLoading}
-                  >
-                    Garantie
-                  </Button>
-                </div>
-              </div>
-
-              {/* Response Area */}
-              {suggestions.length > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-3">
-                    Réponse assistée :
-                  </label>
-                  <GhostInput
-                    suggestions={suggestions}
-                    onAccept={handleAccept}
-                    onNextVariant={handleNextVariant}
-                    onDismiss={handleDismiss}
+              {/* Input Area */}
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter") {
+                        handleSendMessage();
+                      }
+                    }}
+                    placeholder="Tapez votre réponse ici..."
+                    className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   />
-                  
-                  {/* Sources citées */}
-                  {currentSources.length > 0 && (
-                    <div className="mt-4 p-4 bg-muted/50 rounded-lg border border-border">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          <FileText className="w-4 h-4" />
-                          Sources citées ({currentSources.length})
-                        </h4>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={showSources}
-                          className="text-xs"
-                        >
-                          Voir détails
-                        </Button>
-                      </div>
-                      <div className="space-y-2">
-                        {currentSources.slice(0, 2).map((source, idx) => (
-                          <div key={idx} className="text-xs bg-background p-2 rounded border border-border">
-                            <div className="font-medium text-foreground mb-1 flex items-center gap-1">
-                              <ExternalLink className="w-3 h-3" />
-                              {source.title}
-                            </div>
-                            <p className="text-muted-foreground line-clamp-2">
-                              {source.snippet}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="mt-4 flex items-center gap-3">
-                    <Button
-                      onClick={handleSend}
-                      disabled={!acceptedResponse.trim()}
-                      className="gap-2"
-                    >
-                      <Send className="w-4 h-4" />
-                      Envoyer la réponse
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!userInput.trim()}
+                    className="gap-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    Envoyer
+                  </Button>
                 </div>
-              )}
-
-              {suggestions.length === 0 && !isLoading && (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  Sélectionnez un scénario pour obtenir des suggestions de réponse
-                </div>
-              )}
-
-              {isLoading && (
-                <div className="text-center py-8 text-muted-foreground text-sm">
-                  Génération de suggestions...
-                </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -259,65 +159,85 @@ export default function Demo() {
           <div className="space-y-6">
             {/* Corpus documentaire */}
             <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground">
-                  Corpus documentaire
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-foreground mb-2">
+                  Données contextuelles
                 </h3>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Upload className="w-4 h-4" />
-                  Ajouter
+                <div className="flex items-center gap-2">
+                  {corpusInput !== savedCorpus && corpusInput && (
+                    <>
+                      <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full" title="Modifications non sauvegardées"></span>
+                      <span className="text-xs italic text-yellow-600">Modifications en cours. Validez pour enregistrer.</span>
+                    </>
+                  )}
+                  {savedCorpus && corpusInput === savedCorpus && (
+                    <>
+                      <span className="inline-block w-2 h-2 bg-green-500 rounded-full" title="Sauvegardé"></span>
+                      <span className="text-xs italic text-muted-foreground">Contenu sauvegardé. Cliquez pour modifier.</span>
+                    </>
+                  )}
+                  {!savedCorpus && !corpusInput && (
+                    <span className="text-xs italic text-muted-foreground">Aucun contenu. Cliquez pour ajouter.</span>
+                  )}
+                </div>
+              </div>
+              
+              <textarea
+                ref={corpusInputRef}
+                value={corpusInput}
+                onChange={(e) => setCorpusInput(e.target.value)}
+                onClick={() => {
+                  if (!isEditingCorpus && savedCorpus) {
+                    setIsEditingCorpus(true);
+                    setCorpusInput(savedCorpus);
+                    setTimeout(() => {
+                      if (corpusInputRef.current) {
+                        corpusInputRef.current.setSelectionRange(
+                          corpusInputRef.current.value.length,
+                          corpusInputRef.current.value.length
+                        );
+                        corpusInputRef.current.focus();
+                      }
+                    }, 0);
+                  }
+                }}
+                placeholder="Entrez le contenu ou les informations documentaires ici..."
+                className={`w-full h-32 px-4 py-3 border rounded-lg resize-none focus:outline-none focus:ring-2 transition-colors cursor-pointer ${
+                  !isEditingCorpus && savedCorpus
+                    ? "bg-muted text-muted-foreground border-border"
+                    : "bg-background text-foreground border-border focus:ring-primary placeholder-muted-foreground"
+                }`}
+              />
+              
+              <div className="flex gap-2 mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (corpusInput.trim()) {
+                      setSavedCorpus(corpusInput);
+                      setIsEditingCorpus(false);
+                      toast.success("Corpus documentaire sauvegardé !");
+                    }
+                  }}
+                  disabled={corpusInput === savedCorpus}
+                  className="flex-1"
+                >
+                  Valider
                 </Button>
-              </div>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-border">
-                  <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      Procédure suivi colis
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Mis à jour: 12/10/2024
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-border">
-                  <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      Politique retours
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Mis à jour: 08/10/2024
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-border">
-                  <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      Garantie constructeur
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Mis à jour: 05/10/2024
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-border">
-                  <FileText className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      Procédure RMA
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Mis à jour: 01/10/2024
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground text-center">
-                  4 documents indexés • 2.3 MB
-                </p>
+                {savedCorpus && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCorpusInput(savedCorpus);
+                      setIsEditingCorpus(false);
+                    }}
+                    disabled={corpusInput === savedCorpus}
+                  >
+                    Annuler
+                  </Button>
+                )}
               </div>
             </div>
 
