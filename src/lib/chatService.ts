@@ -16,6 +16,7 @@ export interface ChatMessage {
 export interface Chat {
   id: string;
   messages: ChatMessage[];
+  context: string;
 }
 
 export interface CreateChatMessageDTO {
@@ -132,6 +133,28 @@ class ChatService {
       return await response.json();
     } catch (error) {
       console.error("Erreur ChatService.addMessageToChat:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Met à jour le contexte d'un chat
+   */
+  async updateChatContext(chatId: string, context: string): Promise<void> {
+    try {
+      const response = await fetch(`${this.apiUrl}/chats/${chatId}/context`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(context),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erreur lors de la mise à jour du contexte: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("Erreur ChatService.updateChatContext:", error);
       throw error;
     }
   }

@@ -65,6 +65,12 @@ export default function Demo() {
             timestamp: new Date() // Le backend ne fournit pas les timestamps
           }));
           setMessages(displayMessages);
+          
+          // Charger le contexte du chat
+          if (chat.context) {
+            setCorpusInput(chat.context);
+            setSavedCorpus(chat.context);
+          }
         } else {
           toast.error("Aucun chat disponible. Veuillez en créer un.");
         }
@@ -304,14 +310,20 @@ export default function Demo() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    if (corpusInput.trim()) {
-                      setSavedCorpus(corpusInput);
-                      setIsEditingCorpus(false);
-                      toast.success("Corpus documentaire sauvegardé !");
+                  onClick={async () => {
+                    if (corpusInput.trim() && currentChat) {
+                      try {
+                        await chatService.updateChatContext(currentChat.id, corpusInput);
+                        setSavedCorpus(corpusInput);
+                        setIsEditingCorpus(false);
+                        toast.success("Corpus documentaire sauvegardé !");
+                      } catch (error) {
+                        console.error("Erreur lors de la sauvegarde du corpus:", error);
+                        toast.error("Erreur lors de la sauvegarde du corpus");
+                      }
                     }
                   }}
-                  disabled={corpusInput === savedCorpus}
+                  disabled={corpusInput === savedCorpus || !currentChat}
                   className="flex-1"
                 >
                   Valider
