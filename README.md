@@ -1,78 +1,36 @@
-# Agent Assist SAV — WhatsApp & co
+# Agent Assist SAV — WhatsApp & co (frontend)
 
-Assistant de réponse pour équipes SAV sur messageries (WhatsApp en premier). Autocomplétion instantanée, fondée sur vos documents (corpus) et vos règles (préprompt), avec citations et actions SAV simples.
+Assistant de réponse pour équipes SAV, intégré aux messageries (WhatsApp en premier). Il suggère des réponses courtes et contextualisées, appuyées par vos documents (RAG avec citations) et peut déclencher des actions simples (statut commande, RMA, RDV), tout en respectant les règles WhatsApp (fenêtre 24h, templates).
 
-## Points clés
-- Autocomplétion inline (Tab accepter, Esc ignorer), 2–3 variantes.
-- RAG: réponses appuyées sur vos docs (citations cliquables).
-- “Préprompt” par tenant: persona/ton/règles.
-- WhatsApp Business prêt: fenêtre 24h, templates, messages interactifs.
-- Outils (optionnels): statut commande, RMA, prise de RDV.
-- Multilingue + résumés de fil.
+## Pour qui
+- SAV/Support de marques e‑commerce, retail, services.
+- Plateformes relation client souhaitant un “copilot” prêt à intégrer.
 
-## Stack
-- Front: React + Vite
-- Backend: Node/TypeScript (API + Webhook WhatsApp)
-- Recherche: PostgreSQL + pgvector (ou Azure AI Search)
-- Modèles: petit modèle pour “ghost text”, LLM cloud mini (GPT‑4o mini/Haiku) pour la version validée
-- Déploiement: Docker/Compose (POC), OVHcloud (VM ou MKS) en prod
+## Ce que le produit apporte
+- Gain de temps: autocomplétion inline (Tab accepter, Esc ignorer), 2–3 variantes.
+- Fiabilité: réponses fondées sur des sources internes, citations cliquables, mode “silence” si confiance basse.
+- Efficacité: détection d’intentions, résumés de fil, multilingue.
+- Conformité WhatsApp: gestion automatique des templates hors 24h, messages interactifs.
 
-## Démarrage rapide (POC)
-Prérequis: Node 20+, Docker, ngrok (ou équivalent), clé LLM/embeddings. Optionnel: compte Meta (WhatsApp Cloud API) ou Twilio Sandbox.
+## Composants produit
+- Interface opérateur: zone de saisie avec “ghost text”, panneau Sources, snippets “/retour, /suivi…”, contexte client.
+- Moteur d’assistance: recherche hybride (RAG), génération de suggestions, gestion templates, connecteurs SAV (status, RMA, RDV).
 
-1) Cloner et configurer
-- git clone https://github.com/votre-org/agent-assist-sav.git
-- cp .env.example .env et compléter (voir ci-dessous)
+## Fonctionnement (en bref)
+1) Analyse du message (langue, intention, contexte).
+2) Recherche d’extraits pertinents dans vos docs.
+3) Génération de 2–3 réponses courtes avec citations.
+4) Acceptation par l’agent → options (template, boutons, lien suivi).
+5) Journalisation anonymisée pour améliorer la qualité.
 
-2) Lancer services
-- docker compose up -d  (Postgres + pgvector)
-- cd backend && npm i && npm run dev
-- cd frontend && npm i && npm run dev
-- Ouvrir http://localhost:5173
+## Tech stack
 
-3) Ingestion du corpus
-- Déposer vos fichiers dans corpus/raw
-- cd tools && npm i && npm run ingest
-
-4) (Optionnel) WhatsApp
-- ngrok http 3000 → configurer le webhook Meta sur https://votre-ngrok.io/webhooks/whatsapp
-- Utiliser des templates approuvés si >24h depuis le dernier message
-
-## .env minimal (extrait)
-```env
-DATABASE_URL=postgres://postgres:postgres@localhost:5432/assist
-
-# LLM/Embeddings (au choix)
-OPENAI_API_KEY=sk-...
-OPENAI_COMPLETION_MODEL=gpt-4o-mini
-OPENAI_EMBEDDING_MODEL=text-embedding-3-large
-# ou HF (e5): HF_API_TOKEN=hf_... EMBEDDING_MODEL=intfloat/e5-large-v2
-
-# WhatsApp Cloud API (optionnel)
-WA_PHONE_NUMBER_ID=...
-WA_TOKEN=EAAG...
-WA_VERIFY_TOKEN=une_valeur_secrete
-```
-
-## Utilisation
-- Onglet Corpus: importer fichiers, vérifier métadonnées.
-- Onglet Config: définir le préprompt (persona, ton, règles).
-- Chat: écrire; suggestions apparaissent en “ghost text”.
-  - Tab = accepter, Ctrl+Tab = variante, Esc = ignorer
-  - Icône “Sources” → voir les extraits utilisés
-
-## Bonnes pratiques
-- Citations obligatoires pour toute info spécifique.
-- Mode “silence” si pas de source fiable (réduit les hallucinations).
-- N’ingérez pas de PII réelle en POC; logs anonymisés par défaut.
-
-## Roadmap (court)
-- PDF/OCR, reranking, seuils de confiance
-- Connecteurs: Shopify/WooCommerce, transporteurs, Zendesk/Freshdesk
-- Templates WhatsApp par langue, messages interactifs
-- Vision (photos dommages), scorecards qualité
-
-## Licence
-MIT
-
-Déploiement OVHcloud: VM + Docker (POC) ou MKS managé (prod). Besoin d’un docker-compose, manifests K8s ou un guide OVHcloud succinct ? Dis-moi ton option (VM ou MKS) et je te fournis les fichiers prêts à l’emploi.
+- **React** 18 + **TypeScript** — frontend framework
+- **Vite** — build tool & dev server
+- **Tailwind CSS** + **shadcn/ui** — styling & components
+- **React Router** — routing SPA
+- **React Hook Form** + **Zod** — formulaires & validation
+- **TanStack Query** — requêtes & cache
+- **Radix UI** — primitives composants
+- **Sonner**, **Recharts**, **Lucide** — toast, graphiques, icônes
+- **ESLint** + **TypeScript** — code quality
