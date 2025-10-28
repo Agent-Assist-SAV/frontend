@@ -34,7 +34,6 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  status?: "sending" | "sent" | "error"; // statut d'envoi
 }
 
 export default function Demo() {
@@ -135,48 +134,22 @@ export default function Demo() {
     if (!userInput.trim() || !currentChat) return;
 
     const messageText = userInput;
-    const messageId = Date.now().toString();
+    setUserInput("");
 
     try {
-      // Ajouter le message en local avec statut "sending"
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: messageId,
-          role: "assistant",
-          content: messageText,
-          timestamp: new Date(),
-          status: "sending"
-        }
-      ]);
-      setUserInput("");
-
       // Envoyer le message au backend
       // Le message sera reçu via SSE et ajouté automatiquement
       await chatService.addMessageToChat(currentChat.id, {
         message: messageText,
         role: ChatMessageRole.assistant
       });
-
-      // Mettre à jour le statut à "sent"
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId ? { ...msg, status: "sent" } : msg
-        )
-      );
       
       toast.success("Message envoyé !");
     } catch (error) {
       console.error("Erreur lors de l'envoi du message:", error);
-      
-      // Mettre à jour le statut à "error"
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId ? { ...msg, status: "error" } : msg
-        )
-      );
-      
       toast.error("Erreur lors de l'envoi du message");
+      // Restaurer le message dans l'input en cas d'erreur
+      setUserInput(messageText);
     }
   };
 
@@ -252,30 +225,12 @@ export default function Demo() {
                         }`}
                       >
                         <p className="text-sm">{message.content}</p>
-                        <div className="flex items-center justify-between gap-2 mt-1">
-                          <span className="text-xs opacity-70">
-                            {message.timestamp.toLocaleTimeString("fr-FR", {
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            })}
-                          </span>
-                          {index === messages.length - 1 && message.status && (
-                            <span className="text-xs">
-                              {message.status === "sending" && (
-                                <span className="inline-flex items-center gap-1">
-                                  <Loader className="w-3 h-3 animate-spin" />
-                                  Envoi...
-                                </span>
-                              )}
-                              {message.status === "sent" && (
-                                <span className="opacity-70">✓ Envoyé</span>
-                              )}
-                              {message.status === "error" && (
-                                <span className="text-red-500">✗ Erreur</span>
-                              )}
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-xs opacity-70 block mt-1">
+                          {message.timestamp.toLocaleTimeString("fr-FR", {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </span>
                       </div>
                     </div>
                   ))}

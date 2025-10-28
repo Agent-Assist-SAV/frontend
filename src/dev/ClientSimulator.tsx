@@ -51,7 +51,7 @@ export function buildMockMessage(input: {
  */
 export function ClientSimulator(props: ClientSimulatorProps) {
   const [open, setOpen] = useState(true);
-  const [text, setText] = useState("Bonjour, où en est ma commande ?");
+  const [text, setText] = useState("Où en est ma commande ?");
   const [chatIdInput, setChatIdInput] = useState(props.chatId ?? "");
   const [isLoading, setIsLoading] = useState(false);
   const queryClient = useQueryClient();
@@ -86,35 +86,21 @@ export function ClientSimulator(props: ClientSimulatorProps) {
 
     try {
       // 1) Send to backend API
+      // Le message sera automatiquement reçu via SSE et ajouté par le composant Demo
       await chatService.addMessageToChat(resolvedChatId, {
         message: text,
         role: ChatMessageRole.user,
       });
 
-      // 2) TanStack Query: inject into the messages query for the current chat
-      if (queryClient && resolvedChatId) {
-        queryClient.setQueryData(
-          ["chat", resolvedChatId, "messages"],
-          (prev: unknown) => {
-            if (Array.isArray(prev)) {
-              return [...prev, msg];
-            }
-            const prevObj = prev as Record<string, unknown> | undefined;
-            const messages = (prevObj?.messages as MockMessage[]) ?? [];
-            return { ...(prevObj ?? {}), messages: [...messages, msg] };
-          }
-        );
-      }
-
-      // 3) Dispatch a custom event for alternative handlers
+      // 2) Dispatch a custom event for alternative handlers
       const evt = new CustomEvent("message:received", { detail: msg });
       window.dispatchEvent(evt);
 
-      // 4) Call external handler if provided
+      // 3) Call external handler if provided
       props.onInject?.(msg);
 
       toast.success("[DEV] Mock message sent to backend!");
-      console.log("[DEV] Mock message injected:", msg);
+      console.log("[DEV] Mock message sent to backend:", msg);
 
       // Clear input after sending
       setText("");
