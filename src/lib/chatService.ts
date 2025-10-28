@@ -181,6 +181,80 @@ class ChatService {
   }
 
   /**
+   * S'abonne aux suggestions SSE d'un chat
+   * @param chatId ID du chat
+   * @param onChunk Callback appelé à chaque morceau de suggestion reçu
+   * @param onComplete Callback appelé quand la suggestion est complète
+   * @param onError Callback appelé en cas d'erreur
+   */
+  subscribeToSuggestions(
+    chatId: string,
+    onChunk: (chunk: string) => void,
+    onComplete?: () => void,
+    onError?: (error: string) => void
+  ): () => void {
+    const suggestionKey = `suggestion-${chatId}`;
+    
+    // Fermer une connexion existante si elle existe
+    if (this.eventSources.has(suggestionKey)) {
+      this.eventSources.get(suggestionKey)?.close();
+    }
+
+    const eventSource = new EventSource(`${this.apiUrl}/chats/${chatId}/suggest`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = event.data;
+        
+        // Vérifier si c'est la fin du stream
+        if (data === "[DONE]") {
+          eventSource.close();
+          this.eventSources.delete(suggestionKey);
+          if (onComplete) {
+            onComplete();
+          }
+          return;
+        }
+        
+        // Envoyer le chunk au callback
+        onChunk(data);
+      } catch (error) {
+        console.error("Erreur lors du parsing de la suggestion SSE:", error);
+      }
+    };
+
+    eventSource.addEventListener("error", (event: Event) => {
+      const messageEvent = event as MessageEvent;
+      if (messageEvent.data) {
+        const errorMessage = messageEvent.data;
+        if (onError) {
+          onError(errorMessage);
+        }
+      } else {
+        console.error("Erreur SSE suggestion:", event);
+      }
+      eventSource.close();
+      this.eventSources.delete(suggestionKey);
+    });
+
+    eventSource.onerror = () => {
+      // La connexion se fermera automatiquement en cas d'erreur
+      this.eventSources.delete(suggestionKey);
+      if (onError) {
+        onError("Connexion perdue");
+      }
+    };
+
+    this.eventSources.set(suggestionKey, eventSource);
+
+    // Retourner une fonction pour se désabonner
+    return () => {
+      eventSource.close();
+      this.eventSources.delete(suggestionKey);
+    };
+  }
+
+  /**
    * Met à jour le contexte d'un chat
    */
   async updateChatContext(chatId: string, context: string): Promise<void> {
