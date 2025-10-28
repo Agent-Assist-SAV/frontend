@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { X, Send, ChevronDown, Loader } from "lucide-react";
+import { X, Send, Loader, MessageSquare } from "lucide-react";
 import { chatService, ChatMessageRole } from "@/lib/chatService";
 import { toast } from "sonner";
 
@@ -50,7 +50,14 @@ export function buildMockMessage(input: {
  * - Toggle with Ctrl/Cmd+Shift+I
  */
 export function ClientSimulator(props: ClientSimulatorProps) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      const v = typeof window !== "undefined" ? localStorage.getItem("clientSimulatorOpen") : null;
+      return v == null ? true : v === "true";
+    } catch (e) {
+      return true;
+    }
+  });
   const [text, setText] = useState("Où en est ma commande ?");
   const [chatIdInput, setChatIdInput] = useState(props.chatId ?? "");
   const [isLoading, setIsLoading] = useState(false);
@@ -73,6 +80,15 @@ export function ClientSimulator(props: ClientSimulatorProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  // Persist open state so minimized button stays consistent across reloads
+  useEffect(() => {
+    try {
+      localStorage.setItem("clientSimulatorOpen", open ? "true" : "false");
+    } catch (e) {
+      // ignore
+    }
+  }, [open]);
 
   async function inject() {
     if (!text.trim()) return;
@@ -116,7 +132,19 @@ export function ClientSimulator(props: ClientSimulatorProps) {
   }
 
   if (!open) {
-    return null;
+    return (
+      <div className="fixed right-4 bottom-4 z-50">
+        <button
+          onClick={() => setOpen(true)}
+          className="group relative flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-1 ring-primary/30 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+          aria-label="Ouvrir le simulateur de messages"
+          title="Ouvrir le simulateur de messages (Cmd/Ctrl+Shift+I)"
+        >
+          <MessageSquare className="h-5 w-5" />
+          <span className="sr-only">Ouvrir le simulateur de messages</span>
+        </button>
+      </div>
+    );
   }
 
   return (
