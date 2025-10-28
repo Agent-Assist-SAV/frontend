@@ -27,6 +27,7 @@ export interface CreateChatMessageDTO {
 // Service API
 class ChatService {
   private apiUrl = `${API_BASE_URL}/api`;
+  private eventSources: Map<string, EventSource> = new Map();
 
   /**
    * Récupère tous les chats
@@ -134,6 +135,48 @@ class ChatService {
     } catch (error) {
       console.error("Erreur ChatService.addMessageToChat:", error);
       throw error;
+    }
+  }
+
+  /**
+   * S'abonne aux messages SSE d'un chat
+   * @param chatId ID du chat
+   * @param onMessage Callback appelé à chaque nouveau message
+   */
+  subscribeToChat(chatId: string, onMessage: (message: ChatMessage) => void): void {
+    // Fermer une connexion existante si elle existe
+    if (this.eventSources.has(chatId)) {
+      this.eventSources.get(chatId)?.close();
+    }
+
+    const eventSource = new EventSource(`${this.apiUrl}/chats/${chatId}/sse`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as ChatMessage;
+        onMessage(message);
+      } catch (error) {
+        console.error("Erreur lors du parsing du message SSE:", error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("Erreur SSE:", error);
+      // La connexion se fermera automatiquement en cas d'erreur
+      this.eventSources.delete(chatId);
+    };
+
+    this.eventSources.set(chatId, eventSource);
+  }
+
+  /**
+   * Se désabonne des messages SSE d'un chat
+   */
+  unsubscribeFromChat(chatId: string): void {
+    const eventSource = this.eventSources.get(chatId);
+    if (eventSource) {
+      eventSource.close();
+      this.eventSources.delete(chatId);
     }
   }
 

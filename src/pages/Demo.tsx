@@ -5,6 +5,17 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Send, ExternalLink, Loader } from "lucide-react";
 import { chatService, Chat, ChatMessageRole } from "@/lib/chatService";
+import { ChatContext } from "@/contexts/ChatContext";
+
+// Dev-only imports
+const isDev = import.meta.env.DEV || import.meta.env.VITE_ENABLE_SIMULATOR === "1";
+let ClientSimulator: any = null;
+if (isDev) {
+  // Dynamically import dev component
+  import("@/dev/ClientSimulator").then((mod) => {
+    ClientSimulator = mod.ClientSimulator;
+  });
+}
 
 interface Source {
   title: string;
@@ -85,27 +96,64 @@ export default function Demo() {
     loadFirstChat();
   }, []);
 
-    const handleSendMessage = async () => {
+  // S'abonner au SSE du chat quand le chat change
+  useEffect(() => {
+    if (!currentChat) return;
+
+    // S'abonner aux nouveaux messages via SSE
+    chatService.subscribeToChat(currentChat.id, (newMessage) => {
+      console.log("Nouveau message SSE reçu:", newMessage);
+      
+      // Ajouter le message s'il n'existe pas déjà
+      setMessages((prev) => {
+        const messageExists = prev.some((msg) => msg.id === newMessage.id);
+        if (messageExists) {
+          return prev;
+        }
+        
+        return [
+          ...prev,
+          {
+            id: newMessage.id,
+            role: newMessage.role as "user" | "assistant",
+            content: newMessage.message,
+            timestamp: new Date(),
+            status: "sent"
+          }
+        ];
+      });
+    });
+
+    // Cleanup: se désabonner quand le composant est détruit ou le chat change
+    return () => {
+      chatService.unsubscribeFromChat(currentChat.id);
+    };
+  }, [currentChat]);
+
+  const handleSendMessage = async () => {
     if (!userInput.trim() || !currentChat) return;
 
+    const messageText = userInput;
+    const messageId = Date.now().toString();
+
     try {
-      // Créer le message avec statut "sending"
-      const messageId = Date.now().toString();
-      const userMessage: Message = {
-        id: messageId,
-        role: "assistant",
-        content: userInput,
-        timestamp: new Date(),
-        status: "sending"
-      };
-      
-      // Ajouter le message localement immédiatement
-      setMessages((prev) => [...prev, userMessage]);
+      // Ajouter le message en local avec statut "sending"
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: messageId,
+          role: "assistant",
+          content: messageText,
+          timestamp: new Date(),
+          status: "sending"
+        }
+      ]);
       setUserInput("");
 
       // Envoyer le message au backend
+      // Le message sera reçu via SSE et ajouté automatiquement
       await chatService.addMessageToChat(currentChat.id, {
-        message: userInput,
+        message: messageText,
         role: ChatMessageRole.assistant
       });
 
@@ -122,8 +170,8 @@ export default function Demo() {
       
       // Mettre à jour le statut à "error"
       setMessages((prev) =>
-        prev.map((msg, index) =>
-          index === prev.length - 1 ? { ...msg, status: "error" } : msg
+        prev.map((msg) =>
+          msg.id === messageId ? { ...msg, status: "error" } : msg
         )
       );
       
@@ -138,7 +186,8 @@ export default function Demo() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <ChatContext.Provider value={{ currentChatId: currentChat?.id }}>
+      <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -418,6 +467,17 @@ export default function Demo() {
         isOpen={isSourcesOpen}
         onClose={() => setIsSourcesOpen(false)}
       />
-    </div>
+
+      {/* Dev-only client simulator */}
+      {isDev && ClientSimulator && currentChat && (
+        <ClientSimulator
+          chatId={currentChat.id}
+          onInject={(msg: any) => {
+            console.log("[DEV] Mock message injected:", msg);
+          }}
+        />
+      )}
+      </div>
+    </ChatContext.Provider>
   );
 }
