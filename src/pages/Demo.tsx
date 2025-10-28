@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { SourcesDrawer } from "@/components/SourcesDrawer";
+import { SuggestionPanel } from "@/components/SuggestionPanel";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
@@ -209,6 +210,16 @@ export default function Demo() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Chat History */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Suggestion Panel */}
+            {currentChat && !isLoadingChat && (
+              <SuggestionPanel
+                chatId={currentChat.id}
+                onUseSuggestion={(suggestion) => {
+                  setUserInput(suggestion);
+                }}
+              />
+            )}
+
             {/* Conversation */}
             <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
               <h2 className="text-xl font-semibold text-foreground mb-4">
@@ -274,19 +285,20 @@ export default function Demo() {
 
               {/* Input Area */}
               <div className="space-y-4">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
+                <div className="flex gap-2 items-end">
+                  <textarea
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
                     onKeyPress={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
                         handleSendMessage();
                       }
                     }}
-                    placeholder="Tapez votre réponse ici..."
+                    placeholder="Tapez votre réponse ici... (Shift+Enter pour nouvelle ligne)"
                     disabled={isLoadingChat || !currentChat}
-                    className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    rows={3}
+                    className="flex-1 px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed resize-none"
                   />
                   <Button
                     onClick={handleSendMessage}
